@@ -1,0 +1,7 @@
+streamlit
+PyGithub
+python-dotenv
+pandas
+pyyaml
+watchdog
+frontmatter
