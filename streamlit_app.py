@@ -146,13 +146,23 @@ if 'upload_history' not in st.session_state:
 if 'current_tab' not in st.session_state:
     st.session_state.current_tab = 0
 
-
 def parse_markdown_file(content, filename):
     """Parse a markdown file with frontmatter."""
     try:
-        post = frontmatter.loads(content)
-        metadata = dict(post.metadata)
-        content = post.content
+        # Use frontmatter.parse instead of frontmatter.loads
+        post = frontmatter.parse(content)
+        if post is None:
+            # If no frontmatter is found, create default metadata
+            metadata = {
+                'title': Path(filename).stem.replace('-', ' ').title(),
+                'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %z'),
+                'categories': [],
+                'tags': []
+            }
+            content = content
+        else:
+            metadata = dict(post.metadata)
+            content = post.content
         
         # Ensure required fields exist
         if 'title' not in metadata:
@@ -175,14 +185,12 @@ def parse_markdown_file(content, filename):
             'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %z'),
             'categories': [],
             'tags': []
-        }, ""
-
+        }, content
 
 def validate_filename(filename):
     """Validate filename format for Jekyll posts."""
     pattern = r'^\d{4}-\d{2}-\d{2}-[a-zA-Z0-9-]+\.md$'
     return bool(re.match(pattern, filename))
-
 
 def format_filename(title, date=None):
     """Format title into a valid Jekyll post filename."""
@@ -203,7 +211,6 @@ def format_filename(title, date=None):
     
     return f"{date}-{slug}.md"
 
-
 def update_file_content(index):
     """Update file content with edited metadata."""
     if index >= len(st.session_state.uploaded_files):
@@ -221,8 +228,7 @@ def update_file_content(index):
     
     return updated_content
 
-
-def upload_to_github(files_to_upload):
+def upload_to_github(files_to_upload, progress_bar):
     """Upload files to GitHub repository."""
     try:
         # Create a Github instance with the provided token
@@ -274,7 +280,6 @@ def upload_to_github(files_to_upload):
     except Exception as e:
         st.error(f"GitHub upload error: {str(e)}")
         return []
-
 
 # Main layout
 def main():
@@ -388,6 +393,9 @@ def main():
                 if st.button("Upload Files to GitHub", type="primary"):
                     st.markdown("**Upload Progress:**")
                     
+                    # Create progress bar
+                    progress_bar = st.progress(0)
+                    
                     # Prepare files for upload
                     files_to_upload = []
                     for uploaded_file in uploaded_files:
@@ -409,12 +417,9 @@ def main():
                         
                         files_to_upload.append((upload_filename, updated_content))
                     
-                    # Show progress bar
-                    progress_bar = st.progress(0)
-                    
                     # Upload files
                     with st.spinner("Uploading files to GitHub..."):
-                        results = upload_to_github(files_to_upload)
+                        results = upload_to_github(files_to_upload, progress_bar)
                         
                         # Store in upload history
                         for result in results:
@@ -551,7 +556,6 @@ def main():
             if st.button("Clear History"):
                 st.session_state.upload_history = []
                 st.experimental_rerun()
-
 
 if __name__ == "__main__":
     main()
