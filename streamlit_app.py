@@ -149,42 +149,59 @@ if 'current_tab' not in st.session_state:
 def parse_markdown_file(content, filename):
     """Parse a markdown file with frontmatter."""
     try:
-        # Use frontmatter.parse instead of frontmatter.loads
-        post = frontmatter.parse(content)
-        if post is None:
-            # If no frontmatter is found, create default metadata
-            metadata = {
-                'title': Path(filename).stem.replace('-', ' ').title(),
-                'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %z'),
-                'categories': [],
-                'tags': []
-            }
-            content = content
+        # Split content into frontmatter and body
+        parts = content.split('---', 2)
+        if len(parts) >= 3:
+            # Extract frontmatter and content
+            frontmatter_content = parts[1].strip()
+            body_content = parts[2].strip()
+            
+            # Parse frontmatter
+            metadata = yaml.safe_load(frontmatter_content)
+            if metadata is None:
+                metadata = {}
         else:
-            metadata = dict(post.metadata)
-            content = post.content
+            # No valid frontmatter found
+            metadata = {}
+            body_content = content.strip()
         
-        # Ensure required fields exist
+        # Ensure required fields exist with proper formatting
         if 'title' not in metadata:
             metadata['title'] = Path(filename).stem.replace('-', ' ').title()
         
         if 'date' not in metadata:
-            metadata['date'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %z')
+            metadata['date'] = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         if 'categories' not in metadata:
             metadata['categories'] = []
+        elif isinstance(metadata['categories'], str):
+            metadata['categories'] = [metadata['categories']]
         
         if 'tags' not in metadata:
             metadata['tags'] = []
+        elif isinstance(metadata['tags'], str):
+            metadata['tags'] = [metadata['tags']]
+        
+        if 'description' not in metadata:
+            metadata['description'] = ''
+        
+        if 'image' not in metadata:
+            metadata['image'] = ''
+        
+        if 'layout' not in metadata:
+            metadata['layout'] = 'post'
             
-        return metadata, content
+        return metadata, body_content
     except Exception as e:
         st.error(f"Error parsing {filename}: {str(e)}")
         return {
             'title': Path(filename).stem.replace('-', ' ').title(),
-            'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S %z'),
+            'date': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'categories': [],
-            'tags': []
+            'tags': [],
+            'description': '',
+            'image': '',
+            'layout': 'post'
         }, content
 
 def validate_filename(filename):
@@ -221,7 +238,7 @@ def update_file_content(index):
     content = st.session_state.file_contents[filename]
     
     # Create frontmatter
-    frontmatter_content = yaml.dump(metadata, default_flow_style=False)
+    frontmatter_content = yaml.dump(metadata, default_flow_style=False, allow_unicode=True)
     updated_content = f"---\n{frontmatter_content}---\n\n{content}"
     
     st.session_state.file_contents[filename] = content
@@ -340,9 +357,17 @@ def main():
                         )
                         st.session_state.file_metadata[filename]['title'] = new_title
                         
+                        # Description
+                        new_description = st.text_area(
+                            "Description",
+                            st.session_state.file_metadata[filename].get('description', ''),
+                            key=f"description_{i}"
+                        )
+                        st.session_state.file_metadata[filename]['description'] = new_description
+                        
                         # Date
                         new_date = st.text_input(
-                            "Date (YYYY-MM-DD HH:MM:SS +ZZZZ)",
+                            "Date (YYYY-MM-DD HH:MM:SS)",
                             st.session_state.file_metadata[filename].get('date', ''),
                             key=f"date_{i}"
                         )
@@ -369,6 +394,22 @@ def main():
                         st.session_state.file_metadata[filename]['tags'] = [
                             tag.strip() for tag in new_tags.split(',') if tag.strip()
                         ]
+                        
+                        # Image URL
+                        new_image = st.text_input(
+                            "Image URL",
+                            st.session_state.file_metadata[filename].get('image', ''),
+                            key=f"image_{i}"
+                        )
+                        st.session_state.file_metadata[filename]['image'] = new_image
+                        
+                        # Layout
+                        new_layout = st.text_input(
+                            "Layout",
+                            st.session_state.file_metadata[filename].get('layout', 'post'),
+                            key=f"layout_{i}"
+                        )
+                        st.session_state.file_metadata[filename]['layout'] = new_layout
                         
                         # Validate filename
                         if not validate_filename(filename):
@@ -411,7 +452,7 @@ def main():
                             metadata = st.session_state.file_metadata[filename]
                         
                         # Create frontmatter
-                        frontmatter_content = yaml.dump(metadata, default_flow_style=False)
+                        frontmatter_content = yaml.dump(metadata, default_flow_style=False, allow_unicode=True)
                         content = st.session_state.file_contents[filename]
                         updated_content = f"---\n{frontmatter_content}---\n\n{content}"
                         
